@@ -73,6 +73,11 @@ app.get('/',(req, res)=>{
     res.render('home')
 })
 
+app.get('/cart',(req, res)=>{
+
+    res.render('customer/cart')
+})
+
 
 
 // require('./routes/web')(app)
