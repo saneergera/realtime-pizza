@@ -8,13 +8,12 @@ const PORT = process.env.PORT || 3300
 const mongoose = require('mongoose')
 const session = require('express-session')
 const flash = require('express-flash')
-const MongoDbStore = require('connect-mongo')(session)
+const MongoDbStore = require('connect-mongo')
 const passport = require('passport')
 const Emitter = require('events')
 
-// // Database connection
-console.log(process.env.MONGO_CONNECTION_URL)
-mongoose.connect(`mongodb+srv://saneer:NHxcBv4yEMsfl1sk@go-lang.u8tvu.mongodb.net/pizza?retryWrites=true&w=majority`, { useNewUrlParser: true, useCreateIndex:true, useUnifiedTopology: true, useFindAndModify : true });
+// Database connection
+mongoose.connect(process.env.MONGO_CONNECTION_URL, { useNewUrlParser: true, useCreateIndex:true, useUnifiedTopology: true, useFindAndModify : true });
 const connection = mongoose.connection;
 connection.once('open', () => {
     console.log('Database connected...');
@@ -24,94 +23,74 @@ connection.once('open', () => {
 
 
 // // Session store
-let mongoStore = new MongoDbStore({
-                mongooseConnection: connection,
-                collection: 'sessions'
-            })
+// let mongoStore = new MongoDbStore({
+//                 mongooseConnection: connection,
+//                 collection: 'sessions'
+//             })
 
-// // Event emitter
+// Event emitter
 const eventEmitter = new Emitter()
 app.set('eventEmitter', eventEmitter)
 
-// // Session config
+// Session config
 app.use(session({
     secret: process.env.COOKIE_SECRET,
     resave: false,
-    store: mongoStore,
+    store: MongoDbStore.create({
+        mongoUrl: process.env.MONGO_CONNECTION_URL  
+      }),
     saveUninitialized: false,
     cookie: { maxAge: 1000 * 60 * 60 * 24 } // 24 hour
+    
 }))
 
-// // Passport config
-// const passportInit = require('./app/config/passport')
-// passportInit(passport)
-// app.use(passport.initialize())
-// app.use(passport.session())
+// Passport config
+const passportInit = require('./app/config/passport')
+passportInit(passport)
+app.use(passport.initialize())
+app.use(passport.session())
 
-// app.use(flash())
-// // Assets
+app.use(flash())
+// Assets
 app.use(express.static('public'))
 app.use(express.urlencoded({ extended: false }))
 app.use(express.json())
 
-// // Global middleware
-// app.use((req, res, next) => {
-//     res.locals.session = req.session
-//     res.locals.user = req.user
-//     next()
-// })
-
-
-
-// // set Template engine
+// Global middleware
+app.use((req, res, next) => {
+    res.locals.session = req.session
+    res.locals.user = req.user
+    next()
+})
+// set Template engine
 app.use(expressLayout)
 app.set('views', path.join(__dirname, '/resources/views'))
 app.set('view engine', 'ejs')
 
-
-app.get('/',(req, res)=>{
-
-    res.render('home')
+require('./routes/web')(app)
+app.use((req, res) => {
+    res.status(404).render('errors/404')
 })
 
-app.get('/cart',(req, res)=>{
-
-    res.render('customer/cart')
-})
-app.get('/login',(req, res)=>{
-
-    res.render('auth/login')
-})
-app.get('/register',(req, res)=>{
-
-    res.render('auth/register')
-})
-
-
-
-// require('./routes/web')(app)
-// app.use((req, res) => {
-//     res.status(404).render('errors/404')
-// })
-
-app.listen(PORT , () => {
+const server = app.listen(PORT , () => {
             console.log(`Listening on port ${PORT}`)
         })
 
-// // Socket
+// Socket
 
-// const io = require('socket.io')(server)
-// io.on('connection', (socket) => {
-//       // Join
-//       socket.on('join', (orderId) => {
-//         socket.join(orderId)
-//       })
-// })
+const io = require('socket.io')(server)
+io.on('connection', (socket) => {
+      // Join
+      socket.on('join', (orderId) => {
+        socket.join(orderId)
+      })
+})
 
-// eventEmitter.on('orderUpdated', (data) => {
-//     io.to(`order_${data.id}`).emit('orderUpdated', data)
-// })
+eventEmitter.on('orderUpdated', (data) => {
+    io.to(`order_${data.id}`).emit('orderUpdated', data)
+})
 
-// eventEmitter.on('orderPlaced', (data) => {
-//     io.to('adminRoom').emit('orderPlaced', data)
-// })
+eventEmitter.on('orderPlaced', (data) => {
+    io.to('adminRoom').emit('orderPlaced', data)
+})
+
